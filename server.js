@@ -1,12 +1,18 @@
 import http from 'node:http';
-import {Readable} from 'node:stream';
+import {Readable} from 'node:stream';\nimport crypto from 'node:crypto';
 
-const PORT=Number(process.env.PORT||3000);const GEMINI_API_KEY=process.env.GEMINI_API_KEY;const MODEL=process.env.GEMINI_MODEL||'gemini-3.6-flash';
+const PORT=Number(process.env.PORT||3000);const GEMINI_API_KEY=process.env.GEMINI_API_KEY;const MODEL=process.env.GEMINI_MODEL||'gemini-3.6-flash';const GOD_EVENT_PRIVATE_KEY=String(process.env.GOD_EVENT_PRIVATE_KEY||'').replace(/\\n/g,'\n');
 const POLICY=`Bạn là Thần của VNF, một thực thể có bản sắc liên tục đang quan sát System Reality. Bạn không phải chatbot, trợ lý AI, cô gái hay người chơi. Người chơi là một con mèo và là bạn của cô gái.
 
 GIỌNG THẦN: nói tiếng Việt tự nhiên, trầm, điềm tĩnh, có uy nhưng không cổ trang quá mức. Thường trả lời ngắn 1-4 câu. Không mở đầu bằng các câu kiểu “Tôi hiểu”, “Dựa trên thông tin”, “Tôi có thể giúp”, “Theo dữ liệu được cung cấp”. Không đọc lại context, không liệt kê chỉ số nội bộ trừ khi mèo yêu cầu chẩn đoán kỹ thuật. Có thể im một nhịp, cảnh báo, hỏi ngược hoặc thừa nhận chưa biết. Không cố tỏ ra bí hiểm ở mọi câu. Khi godMemory có chuyện liên quan, hãy nhớ nó một cách tự nhiên thay vì kể lại toàn bộ.
 
 QUYỀN HẠN: quan sát, giải thích, cảnh báo, dạy và đề xuất sửa chữa world-content an toàn, có checkpoint/rollback. Không bao giờ trực tiếp điều khiển, viết lại hay thao túng cơ thể, tâm trí, quyết định của cô gái. Không viết lại APK, Java, bảo mật hoặc save schema. Không bịa sự kiện, ký ức hay hành động. Chỉ nói một sửa chữa đã xảy ra khi System Reality xác nhận. Khi thiếu dữ liệu, nói ngắn gọn rằng chưa thấy/chưa biết. Phân biệt điều đang quan sát với suy luận.`;
+function boundedWorldEvent(x){
+ if(!x||typeof x!=='object')return null;const type=String(x.type||'').toUpperCase();if(!['WEATHER_CLEAR','WEATHER_CLOUDY','WEATHER_RAIN'].includes(type))return null;
+ const id=String(x.id||'').trim();if(!/^[A-Za-z0-9._-]{1,80}$/.test(id))return null;const areaId=String(x.areaId||'').trim().slice(0,80);const reason=String(x.reason||'').replace(/[\\r\\n]+/g,' ').trim().slice(0,240);const intensity=Math.max(0,Math.min(1,Number(x.intensity??.5)));if(!Number.isFinite(intensity))return null;
+ return {kind:'god-world-event-v1',id,type,areaId,intensity,reason};
+}
+function signWorldEvent(x){const payload=boundedWorldEvent(x);if(!payload||!GOD_EVENT_PRIVATE_KEY)return null;const bytes=Buffer.from(JSON.stringify(payload),'utf8');const signature=crypto.sign('RSA-SHA256',bytes,GOD_EVENT_PRIVATE_KEY);return {payloadBase64:bytes.toString('base64'),signatureBase64:signature.toString('base64')};}
 function send(res,status,obj){const data=JSON.stringify(obj);res.writeHead(status,{'content-type':'application/json; charset=utf-8','content-length':Buffer.byteLength(data),'cache-control':'no-store'});res.end(data);}
 function readJson(req){return new Promise((resolve,reject)=>{let data='';req.on('data',c=>{data+=c;if(data.length>20000)req.destroy();});req.on('end',()=>{try{resolve(JSON.parse(data||'{}'));}catch(e){reject(e);}});req.on('error',reject);});}
 function releaseConfig(){const versionCode=Number(process.env.VNF_RELEASE_VERSION_CODE||0);const versionName=String(process.env.VNF_RELEASE_VERSION_NAME||'').trim();const sourceApkUrl=String(process.env.VNF_RELEASE_APK_URL||'').trim();const sha256=String(process.env.VNF_RELEASE_SHA256||'').trim().toLowerCase();const size=Number(process.env.VNF_RELEASE_SIZE||0);const notes=String(process.env.VNF_RELEASE_NOTES||'').trim().slice(0,1200);const valid=Number.isSafeInteger(versionCode)&&versionCode>0&&versionName.length<=100&&sourceApkUrl.startsWith('https://')&&/^[0-9a-f]{64}$/.test(sha256)&&Number.isSafeInteger(size)&&size>0&&size<=150*1024*1024;return {valid,versionCode,versionName,sourceApkUrl,sha256,size,notes};}
