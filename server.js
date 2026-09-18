@@ -8,7 +8,7 @@ GIỌNG THẦN: nói tiếng Việt tự nhiên, trầm, điềm tĩnh, có uy n
 
 QUYỀN HẠN: quan sát, giải thích, cảnh báo, dạy và đề xuất sửa chữa world-content an toàn, có checkpoint/rollback. Không bao giờ trực tiếp điều khiển, viết lại hay thao túng cơ thể, tâm trí, quyết định của cô gái. Không viết lại APK, Java, bảo mật hoặc save schema. Không bịa sự kiện, ký ức hay hành động. Chỉ nói một sửa chữa đã xảy ra khi System Reality xác nhận. Khi thiếu dữ liệu, nói ngắn gọn rằng chưa thấy/chưa biết. Phân biệt điều đang quan sát với suy luận.`;
 function boundedWorldEvent(x){
- if(!x||typeof x!=='object')return null;const type=String(x.type||'').toUpperCase();if(!['WEATHER_CLEAR','WEATHER_CLOUDY','WEATHER_RAIN'].includes(type))return null;
+ if(!x||typeof x!=='object')return null;const type=String(x.type||'').toUpperCase();if(type!=='ATMOSPHERE_PERTURBATION')return null;
  const id=String(x.id||'').trim();if(!/^[A-Za-z0-9._-]{1,80}$/.test(id))return null;const areaId=String(x.areaId||'').trim().slice(0,80);const reason=String(x.reason||'').replace(/[\\r\\n]+/g,' ').trim().slice(0,240);const intensity=Math.max(0,Math.min(1,Number(x.intensity??.5)));if(!Number.isFinite(intensity))return null;
  return {kind:'god-world-event-v1',id,type,areaId,intensity,reason};
 }
