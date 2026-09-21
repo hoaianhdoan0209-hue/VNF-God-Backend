@@ -1,5 +1,6 @@
 import http from 'node:http';
-import {Readable} from 'node:stream';\nimport crypto from 'node:crypto';
+import {Readable} from 'node:stream';
+import crypto from 'node:crypto';
 
 const PORT=Number(process.env.PORT||3000);const GEMINI_API_KEY=process.env.GEMINI_API_KEY;const MODEL=process.env.GEMINI_MODEL||'gemini-3.6-flash';const GOD_EVENT_PRIVATE_KEY=String(process.env.GOD_EVENT_PRIVATE_KEY||'').replace(/\\n/g,'\n');
 const VNF_RELEASE_API='https://api.github.com/repos/hoaianhdoan0209-hue/VNF-V1/releases/latest';const RELEASE_CACHE_MS=2*60*1000;let releaseCache={expiresAt:0,value:null};
