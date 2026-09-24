@@ -43,7 +43,41 @@ async function wikimediaReference(query){
  return {used:false,pages:[]};
 }
 function envReleaseConfig(){const versionCode=Number(process.env.VNF_RELEASE_VERSION_CODE||0);const versionName=String(process.env.VNF_RELEASE_VERSION_NAME||'').trim();const sourceApkUrl=String(process.env.VNF_RELEASE_APK_URL||'').trim();const sha256=String(process.env.VNF_RELEASE_SHA256||'').trim().toLowerCase();const size=Number(process.env.VNF_RELEASE_SIZE||0);const notes=String(process.env.VNF_RELEASE_NOTES||'').trim().slice(0,1200);const valid=Number.isSafeInteger(versionCode)&&versionCode>0&&versionName.length<=100&&sourceApkUrl.startsWith('https://')&&/^[0-9a-f]{64}$/.test(sha256)&&Number.isSafeInteger(size)&&size>0&&size<=150*1024*1024;return {valid,versionCode,versionName,sourceApkUrl,sha256,size,notes};}
-async function githubReleaseConfig(){if(releaseCache.value&&Date.now()<releaseCache.expiresAt)return releaseCache.value;const headers={'user-agent':'VNF-God-Backend/1.0','accept':'application/vnd.github+json'};const r=await fetch(VNF_RELEASE_API,{headers});if(!r.ok)throw new Error('GitHub release API HTTP '+r.status);const release=await r.json();if(release?.draft||release?.prerelease)throw new Error('Latest GitHub release is not stable');const assets=Array.isArray(release?.assets)?release.assets:[];const metaAsset=assets.find(a=>a?.name==='vnf-release.json');if(!metaAsset?.browser_download_url)throw new Error('vnf-release.json asset missing');const mr=await fetch(metaAsset.browser_download_url,{redirect:'follow',headers});if(!mr.ok)throw new Error('Release metadata HTTP '+mr.status);const m=await mr.json();const versionCode=Number(m?.versionCode||0),versionName=String(m?.versionName||'').trim(),sha256=String(m?.sha256||'').trim().toLowerCase(),size=Number(m?.size||0),notes=String(m?.notes||'').trim().slice(0,1200),apkAssetName=String(m?.apkAssetName||'').trim();const apk=assets.find(a=>a?.name===apkAssetName)||assets.find(a=>String(a?.name||'').toLowerCase().endsWith('.apk'));const sourceApkUrl=String(apk?.browser_download_url||'').trim();const assetSize=Number(apk?.size||0);const valid=Number.isSafeInteger(versionCode)&&versionCode>0&&versionName.length>0&&versionName.length<=100&&sourceApkUrl.startsWith('https://')&&/^[0-9a-f]{64}$/.test(sha256)&&Number.isSafeInteger(size)&&size>0&&size<=150*1024*1024&&assetSize===size;if(!valid)throw new Error('GitHub release metadata invalid');const value={valid:true,versionCode,versionName,sourceApkUrl,sha256,size,notes};releaseCache={value,expiresAt:Date.now()+RELEASE_CACHE_MS};return value;}
+async function githubReleaseConfig(){
+ if(releaseCache.value&&Date.now()<releaseCache.expiresAt)return releaseCache.value;
+ const headers={'user-agent':'VNF-God-Backend/1.0','accept':'application/vnd.github+json'};
+ const r=await fetch(VNF_RELEASE_API,{headers});if(!r.ok)throw new Error('GitHub release API HTTP '+r.status);
+ const release=await r.json();if(release?.draft||release?.prerelease)throw new Error('Latest GitHub release is not stable');
+ const assets=Array.isArray(release?.assets)?release.assets:[];
+ const buildValue=(versionCode,versionName,sha256,size,notes,apk)=>{
+  const sourceApkUrl=String(apk?.browser_download_url||'').trim(),assetSize=Number(apk?.size||0);
+  const valid=Number.isSafeInteger(versionCode)&&versionCode>0&&versionName.length>0&&versionName.length<=100&&sourceApkUrl.startsWith('https://')&&/^[0-9a-f]{64}$/.test(sha256)&&Number.isSafeInteger(size)&&size>0&&size<=150*1024*1024&&assetSize===size;
+  if(!valid)return null;return {valid:true,versionCode,versionName,sourceApkUrl,sha256,size,notes};
+ };
+ const metaAsset=assets.find(a=>a?.name==='vnf-release.json');
+ if(metaAsset?.browser_download_url){
+  try{
+   const mr=await fetch(metaAsset.browser_download_url,{redirect:'follow',headers:{'user-agent':'VNF-God-Backend/1.0','accept':'application/json'}});
+   if(!mr.ok)throw new Error('Release metadata HTTP '+mr.status);
+   const m=await mr.json();
+   const versionCode=Number(m?.versionCode||0),versionName=String(m?.versionName||'').trim(),sha256=String(m?.sha256||'').trim().toLowerCase(),size=Number(m?.size||0),notes=String(m?.notes||'').trim().slice(0,1200),apkAssetName=String(m?.apkAssetName||'').trim();
+   const apk=assets.find(a=>a?.name===apkAssetName||a?.label===apkAssetName)||assets.find(a=>String(a?.name||'').toLowerCase().endsWith('.apk'));
+   const value=buildValue(versionCode,versionName,sha256,size,notes,apk);
+   if(value){releaseCache={value,expiresAt:Date.now()+RELEASE_CACHE_MS};return value;}
+  }catch(e){console.warn('VNF release metadata fallback:',String(e?.message||e));}
+ }
+ const versionName=String(release?.tag_name||'').trim().replace(/^v/i,'');
+ const body=String(release?.body||'').trim();
+ const match=body.match(/versionCode\s*([0-9]+)/i);
+ const versionCode=match?Number(match[1]):0;
+ const apk=assets.find(a=>String(a?.name||'').toLowerCase().endsWith('.apk'));
+ const digest=String(apk?.digest||'').trim().toLowerCase();
+ const sha256=digest.startsWith('sha256:')?digest.slice(7):'';
+ const size=Number(apk?.size||0),notes=body.slice(0,1200);
+ const value=buildValue(versionCode,versionName,sha256,size,notes,apk);
+ if(!value)throw new Error('GitHub release metadata invalid');
+ releaseCache={value,expiresAt:Date.now()+RELEASE_CACHE_MS};return value;
+}
 async function releaseConfig(){try{return await githubReleaseConfig();}catch(e){const fallback=envReleaseConfig();if(fallback.valid)return fallback;return {valid:false,error:String(e?.message||e)};}}
 function publicBase(req){const proto=String(req.headers['x-forwarded-proto']||'https').split(',')[0].trim();const host=String(req.headers['x-forwarded-host']||req.headers.host||'').split(',')[0].trim();return proto==='https'&&host?`https://${host}`:'';}
 async function updateManifest(req){const c=await releaseConfig();if(!c.valid)return {ok:true,updateAvailable:false};const base=publicBase(req);return {ok:true,updateAvailable:true,versionCode:c.versionCode,versionName:c.versionName,apkUrl:base?`${base}/update/apk`:c.sourceApkUrl,sha256:c.sha256,size:c.size,notes:c.notes};}
