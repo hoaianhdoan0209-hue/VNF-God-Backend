@@ -26,7 +26,7 @@ jobs:
             mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           fi
 
-      - name: Reconstruct V4.3 and apply V4.4 patch
+      - name: Reconstruct V4.3 and apply V4.4 + V4.5 patches
         shell: bash
         run: |
           set -euo pipefail
@@ -37,19 +37,24 @@ jobs:
           tar -xJf /tmp/chanvuc/project.tar.xz -C /tmp/chanvuc
           mkdir -p "$PROJECT_PATH/scripts/polish"
           cp chanvuc_patch/v44_pixel_atmosphere.gd "$PROJECT_PATH/scripts/polish/v44_pixel_atmosphere.gd"
+          cp chanvuc_patch/v45_combat_feedback.gd "$PROJECT_PATH/scripts/polish/v45_combat_feedback.gd"
           python3 - <<'PY'
           from pathlib import Path
           p=Path("/tmp/chanvuc/ChanVuc_PC_Game_V4.3/project.godot")
           s=p.read_text(encoding="utf-8")
-          entry='V44PixelAtmosphere="*res://scripts/polish/v44_pixel_atmosphere.gd"'
-          if entry not in s:
-              if "[autoload]" in s:
-                  s=s.replace("[autoload]\n","[autoload]\n"+entry+"\n",1)
-              else:
-                  s += "\n[autoload]\n"+entry+"\n"
+          entries=[
+              'V44PixelAtmosphere="*res://scripts/polish/v44_pixel_atmosphere.gd"',
+              'V45CombatFeedback="*res://scripts/polish/v45_combat_feedback.gd"'
+          ]
+          for entry in entries:
+              if entry not in s:
+                  if "[autoload]" in s:
+                      s=s.replace("[autoload]\n","[autoload]\n"+entry+"\n",1)
+                  else:
+                      s += "\n[autoload]\n"+entry+"\n"
           if 'config/name=' in s:
               import re
-              s=re.sub(r'config/name="[^"]*"', 'config/name="Chấn Vực V4.4"', s, count=1)
+              s=re.sub(r'config/name="[^"]*"', 'config/name="Chấn Vực V4.5"', s, count=1)
           p.write_text(s,encoding="utf-8")
           PY
           if ! grep -q 'binary_format/embed_pck' "$PROJECT_PATH/export_presets.cfg"; then
