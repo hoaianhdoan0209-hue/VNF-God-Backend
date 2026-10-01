@@ -3,7 +3,7 @@ name: Chan Vuc Windows Build
 on:
   push:
     branches:
-      - chanvuc-build-v43
+      - chanvuc-build-v44
 
 env:
   GODOT_VERSION: 4.7.2
@@ -16,6 +16,7 @@ jobs:
       image: barichello/godot-ci:4.7.2
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup templates
         shell: bash
         run: |
@@ -24,25 +25,45 @@ jobs:
           if [ -d /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ]; then
             mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           fi
-      - name: Reconstruct
+
+      - name: Reconstruct V4.3 and apply V4.4 patch
         shell: bash
         run: |
           set -euo pipefail
           apt-get update -qq
-          apt-get install -y -qq xz-utils
+          apt-get install -y -qq xz-utils python3
           mkdir -p /tmp/chanvuc
           cat chanvuc_build/payload_*.b64 | base64 -d > /tmp/chanvuc/project.tar.xz
           tar -xJf /tmp/chanvuc/project.tar.xz -C /tmp/chanvuc
+          mkdir -p "$PROJECT_PATH/scripts/polish"
+          cp chanvuc_patch/v44_pixel_atmosphere.gd "$PROJECT_PATH/scripts/polish/v44_pixel_atmosphere.gd"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("/tmp/chanvuc/ChanVuc_PC_Game_V4.3/project.godot")
+          s=p.read_text(encoding="utf-8")
+          entry='V44PixelAtmosphere="*res://scripts/polish/v44_pixel_atmosphere.gd"'
+          if entry not in s:
+              if "[autoload]" in s:
+                  s=s.replace("[autoload]\n","[autoload]\n"+entry+"\n",1)
+              else:
+                  s += "\n[autoload]\n"+entry+"\n"
+          if 'config/name=' in s:
+              import re
+              s=re.sub(r'config/name="[^"]*"', 'config/name="Chấn Vực V4.4"', s, count=1)
+          p.write_text(s,encoding="utf-8")
+          PY
           if ! grep -q 'binary_format/embed_pck' "$PROJECT_PATH/export_presets.cfg"; then
             sed -i '/binary_format\/architecture="x86_64"/a binary_format/embed_pck=true' "$PROJECT_PATH/export_presets.cfg"
           fi
           mkdir -p "$GITHUB_WORKSPACE/dist"
+
       - name: Import and parse
         shell: bash
         run: |
           set -o pipefail
           godot --headless --path "$PROJECT_PATH" --editor --quit 2>&1 | tee /tmp/import.log
           if grep -E 'Parse Error|SCRIPT ERROR|Failed loading resource' /tmp/import.log; then exit 1; fi
+
       - name: Boot main scene
         shell: bash
         run: |
@@ -53,6 +74,7 @@ jobs:
           cat /tmp/boot.log
           if grep -E 'Parse Error|SCRIPT ERROR|Failed loading resource|Invalid call|Invalid access' /tmp/boot.log; then exit 1; fi
           if [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ]; then exit "$RC"; fi
+
       - name: Export Windows x64
         shell: bash
         run: |
@@ -60,6 +82,7 @@ jobs:
           godot --headless --verbose --path "$PROJECT_PATH" --export-release "Windows Desktop" "$GITHUB_WORKSPACE/dist/ChanVuc.exe" 2>&1 | tee /tmp/export.log
           if grep -E 'Parse Error|SCRIPT ERROR|Failed loading resource' /tmp/export.log; then exit 1; fi
           test -s "$GITHUB_WORKSPACE/dist/ChanVuc.exe"
+
       - uses: actions/upload-artifact@v4
         with:
           name: ChanVuc-Windows
