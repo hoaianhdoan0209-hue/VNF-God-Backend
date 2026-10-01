@@ -3,7 +3,7 @@ name: Chan Vuc Windows Build
 on:
   push:
     branches:
-      - chanvuc-build-v47
+      - chanvuc-build-v48
 
 env:
   GODOT_VERSION: 4.7.2
@@ -26,7 +26,7 @@ jobs:
             mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           fi
 
-      - name: Reconstruct V4.3 and apply V4.4 + V4.5 + V4.6 + V4.7 redraw
+      - name: Reconstruct V4.3 and apply V4.4-V4.8 patches
         shell: bash
         run: |
           set -euo pipefail
@@ -39,6 +39,7 @@ jobs:
           cp chanvuc_patch/v44_pixel_atmosphere.gd "$PROJECT_PATH/scripts/polish/v44_pixel_atmosphere.gd"
           cp chanvuc_patch/v45_combat_feedback.gd "$PROJECT_PATH/scripts/polish/v45_combat_feedback.gd"
           cp chanvuc_patch/v46_player_combat_fx.gd "$PROJECT_PATH/scripts/polish/v46_player_combat_fx.gd"
+          cp chanvuc_patch/v48_biome_spawn_guard.gd "$PROJECT_PATH/scripts/polish/v48_biome_spawn_guard.gd"
           python3 chanvuc_patch/v47_redraw_assets.py "$PROJECT_PATH"
           python3 - <<'PY'
           from pathlib import Path
@@ -47,7 +48,8 @@ jobs:
           entries=[
               'V44PixelAtmosphere="*res://scripts/polish/v44_pixel_atmosphere.gd"',
               'V45CombatFeedback="*res://scripts/polish/v45_combat_feedback.gd"',
-              'V46PlayerCombatFX="*res://scripts/polish/v46_player_combat_fx.gd"'
+              'V46PlayerCombatFX="*res://scripts/polish/v46_player_combat_fx.gd"',
+              'V48BiomeSpawnGuard="*res://scripts/polish/v48_biome_spawn_guard.gd"'
           ]
           for entry in entries:
               if entry not in s:
@@ -57,7 +59,7 @@ jobs:
                       s += "\n[autoload]\n"+entry+"\n"
           if 'config/name=' in s:
               import re
-              s=re.sub(r'config/name="[^"]*"', 'config/name="Chấn Vực V4.7"', s, count=1)
+              s=re.sub(r'config/name="[^"]*"', 'config/name="Chấn Vực V4.8"', s, count=1)
           p.write_text(s,encoding="utf-8")
           PY
           if ! grep -q 'binary_format/embed_pck' "$PROJECT_PATH/export_presets.cfg"; then
