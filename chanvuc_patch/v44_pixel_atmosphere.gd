@@ -27,12 +27,12 @@ func _process(delta: float) -> void:
 	if is_instance_valid(_world_modulate):
 		_cycle_time = fmod(_cycle_time + delta, 180.0)
 		var phase := _cycle_time / 180.0
-		var daylight := 0.5 + 0.5 * sin(phase * TAU - PI * 0.5)
-		daylight = pow(clamp(daylight, 0.0, 1.0), 0.72)
+		var daylight: float = 0.5 + 0.5 * sin(phase * TAU - PI * 0.5)
+		daylight = pow(clampf(daylight, 0.0, 1.0), 0.72)
 		var night_color := Color(0.48, 0.56, 0.76, 1.0)
 		var dusk_color := Color(0.82, 0.72, 0.80, 1.0)
 		var day_color := Color(1.0, 1.0, 1.0, 1.0)
-		var tint := night_color.lerp(dusk_color, min(daylight * 2.0, 1.0))
+		var tint := night_color.lerp(dusk_color, minf(daylight * 2.0, 1.0))
 		if daylight > 0.5:
 			tint = dusk_color.lerp(day_color, (daylight - 0.5) * 2.0)
 		_world_modulate.color = tint
@@ -218,11 +218,11 @@ func _add_liquid_shimmer(sprite: Sprite2D) -> void:
 func _make_radial_texture(size: int) -> Texture2D:
 	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
 	var center := Vector2(float(size - 1) * 0.5, float(size - 1) * 0.5)
-	var max_d := max(center.x, 1.0)
+	var max_d: float = maxf(center.x, 1.0)
 	for y in range(size):
 		for x in range(size):
-			var d := Vector2(float(x), float(y)).distance_to(center) / max_d
-			var a := pow(max(0.0, 1.0 - d), 1.8)
+			var d: float = Vector2(float(x), float(y)).distance_to(center) / max_d
+			var a: float = pow(maxf(0.0, 1.0 - d), 1.8)
 			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
 	return ImageTexture.create_from_image(img)
 
