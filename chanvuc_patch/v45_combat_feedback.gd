@@ -1,32 +1,46 @@
 extends Node
 
 var _tracked: Dictionary = {}
-var _scan_timer: float = 0.0
+var _scene_id: int = 0
+var _cleanup_timer: float = 0.0
 var _pixel_texture: Texture2D
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_pixel_texture = _make_pixel_texture()
+	get_tree().node_added.connect(_on_node_added)
+	call_deferred("_scan_current_scene_once")
 
 func _process(delta: float) -> void:
-	_scan_timer -= delta
-	if _scan_timer <= 0.0:
-		_scan_timer = 0.35
-		_scan_for_enemies()
-	_cleanup_dead_refs()
+	var scene: Node = get_tree().current_scene
+	if scene != null and scene.get_instance_id() != _scene_id:
+		_scene_id = scene.get_instance_id()
+		call_deferred("_scan_current_scene_once")
+	_cleanup_timer -= delta
+	if _cleanup_timer <= 0.0:
+		_cleanup_timer = 1.0
+		_cleanup_dead_refs()
 
-func _scan_for_enemies() -> void:
+func _on_node_added(node: Node) -> void:
+	if node == null:
+		return
+	if _looks_like_enemy(node):
+		call_deferred("_bind_enemy", node)
+
+func _scan_current_scene_once() -> void:
 	var scene: Node = get_tree().current_scene
 	if scene == null:
 		return
+	_scene_id = scene.get_instance_id()
 	var pending: Array[Node] = [scene]
 	while not pending.is_empty():
 		var node: Node = pending.pop_back()
+		if _looks_like_enemy(node):
+			_bind_enemy(node)
+			continue
 		var children: Array[Node] = node.get_children()
 		for child in children:
 			pending.append(child)
-		if _looks_like_enemy(node):
-			_bind_enemy(node)
 
 func _looks_like_enemy(node: Node) -> bool:
 	if not (node is Node2D):
@@ -42,6 +56,8 @@ func _looks_like_enemy(node: Node) -> bool:
 	return false
 
 func _bind_enemy(enemy: Node) -> void:
+	if enemy == null or not is_instance_valid(enemy):
+		return
 	var id: int = enemy.get_instance_id()
 	if _tracked.has(id):
 		return
@@ -79,7 +95,6 @@ func _on_health_changed(current: float, maximum: float, id: int) -> void:
 		return
 
 	_update_bar(ui, current, maximum)
-
 	var damage: float = maxf(0.0, previous - current)
 	if damage > 0.0:
 		_spawn_damage_number(enemy, damage)
@@ -87,15 +102,14 @@ func _on_health_changed(current: float, maximum: float, id: int) -> void:
 
 func _on_enemy_died(enemy_node: Node, _killer: Node, id: int) -> void:
 	if enemy_node is Node2D:
-		_spawn_death_burst(enemy_node)
-	if _tracked.has(id):
-		_tracked.erase(id)
+		_spawn_death_burst(enemy_node as Node2D)
+	_tracked.erase(id)
 
 func _create_enemy_ui(enemy: Node, current: float, maximum: float) -> Node2D:
 	var existing: Node = enemy.get_node_or_null("V45CombatUI")
 	if existing is Node2D:
 		_update_bar(existing, current, maximum)
-		return existing
+		return existing as Node2D
 
 	var ui := Node2D.new()
 	ui.name = "V45CombatUI"
@@ -144,7 +158,6 @@ func _update_bar(ui: Node, current: float, maximum: float) -> void:
 	var ratio: float = 0.0
 	if maximum > 0.0:
 		ratio = clampf(current / maximum, 0.0, 1.0)
-
 	var fill: ColorRect = ui.get_node_or_null("HPFill") as ColorRect
 	var marker: ColorRect = ui.get_node_or_null("HPHighlight") as ColorRect
 	if fill != null:
@@ -181,16 +194,9 @@ func _flash_enemy(enemy: Node) -> void:
 	var visual: CanvasItem = _find_visual_item(enemy)
 	if visual == null:
 		return
-
-	if visual.has_meta("v45_flash_tween"):
-		var old_tween: Variant = visual.get_meta("v45_flash_tween")
-		if old_tween is Tween and old_tween.is_valid():
-			old_tween.kill()
-
 	var original: Color = visual.modulate
 	visual.modulate = Color(1.35, 0.46, 0.28, original.a)
 	var tween: Tween = enemy.create_tween()
-	visual.set_meta("v45_flash_tween", tween)
 	tween.tween_property(visual, "modulate", original, 0.13)
 
 func _find_visual_item(root: Node) -> CanvasItem:
@@ -217,29 +223,25 @@ func _spawn_death_burst(enemy: Node2D) -> void:
 	var parent: Node = enemy.get_parent()
 	if parent == null:
 		return
-
 	var burst := CPUParticles2D.new()
 	burst.name = "V45DeathBurst"
 	burst.texture = _pixel_texture
 	burst.position = enemy.position + Vector2(0, -8)
 	burst.z_index = 95
-	burst.amount = 28
-	burst.lifetime = 0.65
+	burst.amount = 20
+	burst.lifetime = 0.55
 	burst.one_shot = true
 	burst.explosiveness = 0.92
 	burst.local_coords = false
 	burst.direction = Vector2(0, -1)
 	burst.spread = 180.0
 	burst.initial_velocity_min = 28.0
-	burst.initial_velocity_max = 70.0
+	burst.initial_velocity_max = 64.0
 	burst.gravity = Vector2(0, 82)
-	burst.scale_amount_min = 0.8
-	burst.scale_amount_max = 1.6
 	burst.color = Color(1.0, 0.28, 0.04, 0.95)
 	parent.add_child(burst)
 	burst.emitting = true
-
-	var timer: SceneTreeTimer = get_tree().create_timer(1.2)
+	var timer: SceneTreeTimer = get_tree().create_timer(1.0)
 	timer.timeout.connect(func() -> void:
 		if is_instance_valid(burst):
 			burst.queue_free()
