@@ -9,6 +9,7 @@ var _cycle_time := 48.0
 var _light_texture: Texture2D
 var _pixel_texture: Texture2D
 var _liquid_shader: Shader
+var _installing := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -23,6 +24,9 @@ func _process(delta: float) -> void:
 	var scene := get_tree().current_scene
 	if scene != null and scene.get_instance_id() != _scene_id:
 		_install_for_current_scene()
+
+	if not is_instance_valid(_player_light):
+		_attach_player_fx()
 
 	if is_instance_valid(_world_modulate):
 		_cycle_time = fmod(_cycle_time + delta, 180.0)
@@ -61,19 +65,24 @@ func _install_for_current_scene() -> void:
 		_world_modulate.name = "V44WorldModulate"
 		scene.add_child(_world_modulate)
 
-	_decorate_tree(scene)
+	_installing = true
+	_decorate_existing(scene)
 	_attach_player_fx()
+	_installing = false
 
 func _on_node_added(node: Node) -> void:
-	if node == null:
+	if node == null or _installing:
 		return
 	call_deferred("_decorate_node", node)
-	call_deferred("_attach_player_fx")
 
-func _decorate_tree(node: Node) -> void:
-	_decorate_node(node)
-	for child in node.get_children():
-		_decorate_tree(child)
+func _decorate_existing(root: Node) -> void:
+	var pending: Array[Node] = [root]
+	while not pending.is_empty():
+		var node: Node = pending.pop_back()
+		var children: Array[Node] = node.get_children()
+		for child in children:
+			pending.append(child)
+		_decorate_node(node)
 
 func _decorate_node(node: Node) -> void:
 	if node == null or not is_instance_valid(node):
