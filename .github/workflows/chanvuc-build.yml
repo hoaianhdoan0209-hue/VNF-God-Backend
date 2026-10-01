@@ -1,0 +1,68 @@
+name: Chan Vuc Windows Build
+
+on:
+  push:
+    branches:
+      - chanvuc-build-v43
+
+env:
+  GODOT_VERSION: 4.7.2
+  PROJECT_PATH: /tmp/chanvuc/ChanVuc_PC_Game_V4.3
+
+jobs:
+  export-windows:
+    runs-on: ubuntu-24.04
+    container:
+      image: barichello/godot-ci:4.7.2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup templates
+        shell: bash
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates ~/.config
+          if [ -d /root/.config/godot ]; then mv /root/.config/godot ~/.config/godot; fi
+          if [ -d /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ]; then
+            mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          fi
+      - name: Reconstruct
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          apt-get install -y -qq xz-utils
+          mkdir -p /tmp/chanvuc
+          cat chanvuc_build/payload_*.b64 | base64 -d > /tmp/chanvuc/project.tar.xz
+          tar -xJf /tmp/chanvuc/project.tar.xz -C /tmp/chanvuc
+          if ! grep -q 'binary_format/embed_pck' "$PROJECT_PATH/export_presets.cfg"; then
+            sed -i '/binary_format\/architecture="x86_64"/a binary_format/embed_pck=true' "$PROJECT_PATH/export_presets.cfg"
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+      - name: Import and parse
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --path "$PROJECT_PATH" --editor --quit 2>&1 | tee /tmp/import.log
+          if grep -E 'Parse Error|SCRIPT ERROR|Failed loading resource' /tmp/import.log; then exit 1; fi
+      - name: Boot main scene
+        shell: bash
+        run: |
+          set +e
+          timeout 8s godot --headless --path "$PROJECT_PATH" > /tmp/boot.log 2>&1
+          RC=$?
+          set -e
+          cat /tmp/boot.log
+          if grep -E 'Parse Error|SCRIPT ERROR|Failed loading resource|Invalid call|Invalid access' /tmp/boot.log; then exit 1; fi
+          if [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ]; then exit "$RC"; fi
+      - name: Export Windows x64
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --verbose --path "$PROJECT_PATH" --export-release "Windows Desktop" "$GITHUB_WORKSPACE/dist/ChanVuc.exe" 2>&1 | tee /tmp/export.log
+          if grep -E 'Parse Error|SCRIPT ERROR|Failed loading resource' /tmp/export.log; then exit 1; fi
+          test -s "$GITHUB_WORKSPACE/dist/ChanVuc.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChanVuc-Windows
+          path: dist/ChanVuc.exe
+          if-no-files-found: error
+          retention-days: 1
