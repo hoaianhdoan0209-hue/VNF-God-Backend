@@ -3,7 +3,7 @@ name: Chan Vuc Windows Build
 on:
   push:
     branches:
-      - chanvuc-build-v44
+      - chanvuc-build-v45
 
 env:
   GODOT_VERSION: 4.7.2
