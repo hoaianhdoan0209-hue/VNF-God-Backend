@@ -3,7 +3,7 @@ name: Chan Vuc Windows Build
 on:
   push:
     branches:
-      - chanvuc-build-v45
+      - chanvuc-build-v46
 
 env:
   GODOT_VERSION: 4.7.2
@@ -26,7 +26,7 @@ jobs:
             mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           fi
 
-      - name: Reconstruct V4.3 and apply V4.4 + V4.5 patches
+      - name: Reconstruct V4.3 and apply V4.4 + V4.5 + V4.6 patches
         shell: bash
         run: |
           set -euo pipefail
@@ -38,13 +38,15 @@ jobs:
           mkdir -p "$PROJECT_PATH/scripts/polish"
           cp chanvuc_patch/v44_pixel_atmosphere.gd "$PROJECT_PATH/scripts/polish/v44_pixel_atmosphere.gd"
           cp chanvuc_patch/v45_combat_feedback.gd "$PROJECT_PATH/scripts/polish/v45_combat_feedback.gd"
+          cp chanvuc_patch/v46_player_combat_fx.gd "$PROJECT_PATH/scripts/polish/v46_player_combat_fx.gd"
           python3 - <<'PY'
           from pathlib import Path
           p=Path("/tmp/chanvuc/ChanVuc_PC_Game_V4.3/project.godot")
           s=p.read_text(encoding="utf-8")
           entries=[
               'V44PixelAtmosphere="*res://scripts/polish/v44_pixel_atmosphere.gd"',
-              'V45CombatFeedback="*res://scripts/polish/v45_combat_feedback.gd"'
+              'V45CombatFeedback="*res://scripts/polish/v45_combat_feedback.gd"',
+              'V46PlayerCombatFX="*res://scripts/polish/v46_player_combat_fx.gd"'
           ]
           for entry in entries:
               if entry not in s:
@@ -54,7 +56,7 @@ jobs:
                       s += "\n[autoload]\n"+entry+"\n"
           if 'config/name=' in s:
               import re
-              s=re.sub(r'config/name="[^"]*"', 'config/name="Chấn Vực V4.5"', s, count=1)
+              s=re.sub(r'config/name="[^"]*"', 'config/name="Chấn Vực V4.6"', s, count=1)
           p.write_text(s,encoding="utf-8")
           PY
           if ! grep -q 'binary_format/embed_pck' "$PROJECT_PATH/export_presets.cfg"; then
